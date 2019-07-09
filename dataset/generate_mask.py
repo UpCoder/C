@@ -5,6 +5,7 @@ import os
 from dataset.utils import resolve_annotation, load_itk, world2pixel, save_mhd_image
 import numpy as np
 from tqdm import tqdm
+from glob import glob
 
 
 def generate_masks(annotation_path, dataset_dir, save_dir):
@@ -15,7 +16,9 @@ def generate_masks(annotation_path, dataset_dir, save_dir):
     :return:
     '''
     annotation_obj = resolve_annotation(annotation_path)
-    for case_id in tqdm(annotation_obj.keys()):
+    image_paths = glob(os.path.join(dataset_dir, '*.mhd'))
+    case_ids = [os.path.basename(image_path).split('.')[0] for image_path in image_paths]
+    for case_id in tqdm(case_ids):
         # if case_id != '641414':
         #     continue
         mhd_path = os.path.join(dataset_dir, '{}.mhd'.format(case_id))
@@ -53,8 +56,8 @@ def generate_masks(annotation_path, dataset_dir, save_dir):
 
 
 if __name__ == '__main__':
-    dataset_dir = '/Users/liang/Documents/datasets/chestCT'
-    # dataset_dir = '/mnt/cephfs_hl/vc/liangdong.tony/datasets/chestCT'
+    # dataset_dir = '/Users/liang/Documents/datasets/chestCT'
+    dataset_dir = '/mnt/cephfs_hl/vc/liangdong.tony/datasets/chestCT'
     annotation_path = os.path.join(dataset_dir, 'chestCT_round1_annotation.csv')
     image_dir = os.path.join(dataset_dir, 'train')
     annotation_dir = os.path.join(dataset_dir, 'annotation')
