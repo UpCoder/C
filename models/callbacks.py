@@ -75,11 +75,18 @@ class Tensorboard(tf.keras.callbacks.Callback):
         self.log_dir = log_dir
         self.writer = tf.summary.FileWriter(self.log_dir)
         self.sess = K.get_session()
-        self.summary_op = summary_op
         self.epoch = 0
+        self.summary_op = summary_op
         self.steps_per_epoch = dataset_config.num_total_samples // dataset_config.batch_size
+        self.model = None
+
+    # def set_model(self, model):
+    #     self.model = model
+    #     for callback in self.callbacks:
+    #         callback.set_model(model)
 
     def on_batch_begin(self, batch, logs=None):
+        # selkf
         self.step = self.epoch * self.steps_per_epoch + batch
         logs.update({'learning_rate': float(K.get_value(self.model.optimizer.lr))})
         if batch % self.batch_interval == 0:

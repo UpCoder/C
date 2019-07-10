@@ -35,6 +35,9 @@ def generate_tfrecords_V1Core(case_ids, dataset_dir, annotation_dir, save_path):
             mask, _, _ = load_itk(cur_mask_path)
             sum_slices = np.sum(np.sum(mask, axis=1), axis=1)
             num_pos_slices = np.sum(sum_slices != 0)
+            if num_pos_slices == 0:
+                print('skip {}'.format(case_id))
+                continue
             pos_slice_idx_set = set(np.where(sum_slices != 0)[0].tolist())
             neg_slice_idx_set = set(range(len(image))) - pos_slice_idx_set
             pos_slice_idx_set = list(pos_slice_idx_set)
@@ -84,9 +87,11 @@ def generate_tfrecords_V1Core(case_ids, dataset_dir, annotation_dir, save_path):
                 )
                 save_image_slices.append(np.transpose(np.asarray(cur_slices, np.float32), axes=[1, 2, 0]))
                 save_mask_slices.append(np.transpose(cur_mask_slices, axes=[1, 2, 0]))
-            print(np.shape(save_image_slices), np.shape(save_mask_slices))
-
+            num_frames += len(save_image_slices)
+            print(np.shape(save_image_slices), np.shape(save_mask_slices), num_frames, case_id)
             for idx, (image, mask) in enumerate(zip(save_image_slices, save_mask_slices)):
+                image = cv2.resize(image, (512, 512))
+                mask = cv2.resize(mask, (512, 512), interpolation=cv2.INTER_NEAREST)
                 example = Example()
                 example.init_values(
                     ['image', 'mask', 'height', 'width', 'channel'],
@@ -94,7 +99,7 @@ def generate_tfrecords_V1Core(case_ids, dataset_dir, annotation_dir, save_path):
                     [np.asarray(image, np.uint8), np.asarray(mask, np.uint8), 512, 512, 3]
                 )
                 writer.write(example.get_examples().SerializeToString())
-            num_frames += len(save_image_slices)
+
             # 保存图像
             # cur_tmp_dir = os.path.join(tmp_dir, case_id)
             # if not os.path.exists(cur_tmp_dir):
@@ -122,7 +127,7 @@ def generate_tfrecords_V1(dataset_dir, annotation_dir, save_dir):
     tmp_dir = './tmp'
     if not os.path.exists(tmp_dir):
         os.mkdir(tmp_dir)
-    save_dir = os.path.join(save_dir, 'V1')
+    save_dir = os.path.join(save_dir, 'V2')
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
     num_processing = 16
@@ -133,7 +138,7 @@ def generate_tfrecords_V1(dataset_dir, annotation_dir, save_dir):
     results = []
     for i in range(num_processing):
         input_ids = case_ids[num_id_per_processing * i: num_id_per_processing * (i + 1)]
-        print(len(input_ids))
+        print('idx is {}, ', i)
         results.append(p.apply_async(generate_tfrecords_V1Core, args=(input_ids, dataset_dir, annotation_dir,
                                                                       os.path.join(save_dir,
                                                                                    '{}.tfrecords'.format(i)),)))

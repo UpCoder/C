@@ -2,6 +2,7 @@ import tensorflow as tf
 import os
 from tensorflow.contrib import slim
 import numpy as np
+from tqdm import tqdm
 
 
 def _int64_feature(value):
@@ -121,7 +122,7 @@ def _parse_function(proto):
     #                     "label": tf.FixedLenFeature([], tf.int64)}
     #
     keys_to_features = {
-        'image': tf.FixedLenFeature([512, 512, 3], dtype=tf.float32, default_value=np.zeros([512, 512, 3])),
+        'image': tf.FixedLenFeature([512, 512, 3], dtype=tf.int64, default_value=np.zeros([512, 512, 3])),
         'mask': tf.FixedLenFeature([512, 512, 3], dtype=tf.int64),
         'height': tf.FixedLenFeature((), tf.int64),
         'width': tf.FixedLenFeature((), tf.int64),
@@ -136,13 +137,17 @@ def _parse_function(proto):
     return parsed_features['image'], parsed_features['height'], parsed_features['width']
 
 
-def demo_read():
+def demo_read(idx):
     from glob import glob
-    tfrecord_paths = glob(os.path.join('/mnt/cephfs_hl/vc/liangdong.tony/datasets/chestCT/tfrecords/V1/*.tfrecords'))
+    if idx == -1:
+        tfrecord_paths = glob(os.path.join('/mnt/cephfs_hl/vc/liangdong.tony/datasets/chestCT/tfrecords/V2/*.tfrecords'))
+    else:
+        tfrecord_paths = glob(
+            os.path.join('/mnt/cephfs_hl/vc/liangdong.tony/datasets/chestCT/tfrecords/V2/{}.tfrecords'.format(idx)))
     dataset = tf.data.TFRecordDataset(tfrecord_paths)
     dataset = dataset.map(_parse_function, num_parallel_calls=5)
     dataset = dataset.repeat()
-    dataset = dataset.shuffle(10, seed=2019)
+    # dataset = dataset.shuffle(10, seed=2019)
     dataset = dataset.batch(32)
     # dataset = dataset.prefetch(1)
     iterator = dataset.make_one_shot_iterator()
@@ -163,19 +168,21 @@ def main_reader():
     #     dataset, num_readers=1, common_queue_capacity=batch_size * 1000, common_queue_min=batch_size * 100, shuffle=True)
 
     # i_array, mask_array, height_tensor, width_tensor = provider.get(['image', 'mask', 'height', 'width'])
-    i_array, height_tensor, width_tensor = demo_read()
+    # for idx in range(9, 10):
+    i_array, height_tensor, width_tensor = demo_read(-1)
     print(i_array)
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     gpu_config = tf.ConfigProto()
     gpu_config.gpu_options.allow_growth = True
     sess = tf.Session(config=gpu_config)
     thread = tf.train.start_queue_runners(sess=sess)
-
-    ia = sess.run([i_array])
-    ia = np.squeeze(ia)
-    print(np.shape(ia))
-    for idx, image in enumerate(ia):
-        cv2.imwrite('./tmp/{}.jpg'.format(idx), image[:, :, ::-1])
+    for i in tqdm(range(1000)):
+        ia = sess.run([i_array])
+        ia = np.squeeze(ia)
+        # print(np.shape(ia), 'idx is ', idx)
+        print(np.max(ia), np.min(ia), np.mean(ia))
+    # for idx, image in enumerate(ia):
+    # cv2.imwrite('./tmp/{}.jpg'.format(idx), image[:, :, ::-1])
 
 
 if __name__ == '__main__':

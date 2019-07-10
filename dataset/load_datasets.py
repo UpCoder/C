@@ -12,7 +12,7 @@ def _parse_function(proto):
     #                     "label": tf.FixedLenFeature([], tf.int64)}
     #
     keys_to_features = {
-        'image': tf.FixedLenFeature([512, 512, 3], dtype=tf.float32, default_value=np.zeros([512, 512, 3])),
+        'image': tf.FixedLenFeature([512, 512, 3], dtype=tf.int64, default_value=np.zeros([512, 512, 3])),
         'mask': tf.FixedLenFeature([512, 512, 3], dtype=tf.int64),
         'height': tf.FixedLenFeature((), tf.int64),
         'width': tf.FixedLenFeature((), tf.int64),
@@ -34,7 +34,12 @@ def load_dataset(dataset_dir='/mnt/cephfs_hl/vc/liangdong.tony/datasets/chestCT/
     :param binary_flag: 是否返回二分类的label
     :return:
     '''
+    tfrecord_paths = []
+    # for i in range(8):
+    #     tfrecord_paths.append(os.path.join(dataset_dir, '{}.tfrecords'.format(i)))
+    # print(tfrecord_paths)
     tfrecord_paths = glob(os.path.join(dataset_dir, '*.tfrecords'))
+    print(tfrecord_paths)
     dataset = tf.data.TFRecordDataset(tfrecord_paths)
     dataset = dataset.map(_parse_function, num_parallel_calls=config.num_parallel_reader)
     dataset = dataset.repeat()
@@ -53,10 +58,10 @@ def load_dataset(dataset_dir='/mnt/cephfs_hl/vc/liangdong.tony/datasets/chestCT/
     input_shape.extend(list(config.input_shape))
     images.set_shape(input_shape)
     mask.set_shape(input_shape[:3])
-    tf.summary.image('input/images', images, max_outputs=3)
-    tf.summary.image('input/masks', mask, max_outputs=3)
-    images = tf.cast(images, tf.float32)
     mask = tf.expand_dims(mask, axis=3)
+    tf.summary.image('input/images', tf.cast(images, tf.uint8), max_outputs=3)
+    tf.summary.image('input/masks', tf.cast(mask * 200, tf.uint8), max_outputs=3)
+    images = tf.cast(images, tf.float32)
     return images, height, width, mask
 
 
