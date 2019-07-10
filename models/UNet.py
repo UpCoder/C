@@ -16,12 +16,12 @@ gpu_config = tf.ConfigProto(allow_soft_placement=True)
 gpu_config.gpu_options.allow_growth = True
 sess = tf.Session(config=gpu_config)
 keras.backend.set_session(sess)
-dataset_dir = '/mnt/cephfs_hl/vc/liangdong.tony/datasets/chestCT/tfrecords/V1'
 
 
 class UNet:
     def __init__(self, backbone='resnet50', num_classes=1, encoder_weights='imagenet',
-                 train_dir='./ck/', log_dir='./logs'):
+                 train_dir='./ck/', log_dir='./logs',
+                 dataset_dir='/mnt/cephfs_hl/vc/liangdong.tony/datasets/chestCT/tfrecords/V1'):
         self.preprocess_input = get_preprocessing(backbone)
         self.input_image, _, _, self.input_mask = load_dataset(dataset_dir)
         self.input_image = self.preprocess_input(self.input_image)
@@ -33,8 +33,6 @@ class UNet:
         inputs_all = []
 
         for i in range(global_config.num_gpus):
-            # cur_inputs = []
-            # cur_inputs.append()
             inputs_all.append(keras.layers.Input(tensor=get_slice(self.input_image, i, global_config.num_gpus)))
 
         num_outputs = 1
@@ -53,24 +51,43 @@ class UNet:
             merged = []
             for outputs in outputs_all:
                 merged.append(keras.layers.Concatenate(axis=0)(outputs))
+            pred_tensor = merged[0]
+            gt_tensor = keras.backend.cast(self.input_mask, "float32")
+            tf.summary.scalar('distribution/seg_output/max',
+                              tf.reduce_mean(tf.reduce_max(pred_tensor, axis=[1, 2, 3]), axis=0))
+            tf.summary.scalar('distribution/seg_output/min',
+                              tf.reduce_mean(tf.reduce_min(pred_tensor, axis=[1, 2, 3]), axis=0))
+            tf.summary.scalar('distribution/seg_output/std',
+                              tf.reduce_mean(tf.reduce_sum(
+                                  (pred_tensor - tf.reduce_mean(pred_tensor, axis=[1, 2, 3], keepdims=True)) *
+                                  (pred_tensor - tf.reduce_mean(pred_tensor, axis=[1, 2, 3], keepdims=True)),
+                                  axis=[1, 2, 3]
+                              )))
 
+            loss_bce_dice_loss = keras.layers.Lambda(lambda xs: bce_dice_loss(xs[0], xs[1]))([gt_tensor, pred_tensor])
+            tf.summary.scalar('loss/bce_dice', loss_bce_dice_loss)
+            tf.summary.scalar('metrics/dice', dice_score(gt_tensor, pred_tensor))
             tf.summary.image('output/pred', tf.cast(merged[0] * 255., tf.uint8), max_outputs=3)
             summary_op = tf.summary.merge_all()
             self.parallel_model = keras.models.Model(inputs=inputs_all, outputs=merged)
-
+            self.parallel_model.add_loss(loss_bce_dice_loss)
             cb_tensorboard = Tensorboard(summary_op, batch_interval=10, log_dir=log_dir)
             cb_checkpointer = CustomCheckpointer(train_dir, self.base_model, monitor='loss', mode='min',
                                                  save_best_only=False, verbose=False)
             # tf.keras.callbacks.TensorBoard
             self.cbs = [cb_tensorboard, cb_checkpointer]
             # self.parallel_model = keras.utils.multi_gpu_model(self.model, gpus=global_config.num_gpus)
-            self.parallel_model.compile('Adam', loss=bce_dice_loss, metrics=[iou_score, dice_score])
+            self.optimizer = keras.optimizers.Adam(lr=0.0001)
+            self.parallel_model.compile(self.optimizer,
+                                        # loss=bce_dice_loss,
+                                        # metrics=[iou_score, dice_score]
+                                        )
 
     def train(self):
         print(dataset_config.num_total_samples // dataset_config.batch_size)
         self.parallel_model.fit(
             # x=self.input_image,
-            y=self.input_mask,
+            # y=self.input_mask,
             steps_per_epoch=dataset_config.num_total_samples // dataset_config.batch_size, epochs=100,
             callbacks=self.cbs
         )

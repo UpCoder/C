@@ -231,17 +231,6 @@ def generate_tfrecords_V2Core(case_ids, dataset_dir, annotation_dir, save_path):
                     [np.asarray(image, np.float32), np.asarray(mask, np.uint8), 512, 512, 3]
                 )
                 writer.write(example.get_examples().SerializeToString())
-
-            # 保存图像
-            # cur_tmp_dir = os.path.join(tmp_dir, case_id)
-            # if not os.path.exists(cur_tmp_dir):
-            #     os.mkdir(cur_tmp_dir)
-            # for idx, (image, mask) in enumerate(zip(save_image_slices, save_mask_slices)):
-            #     image[image > up_boundary] = up_boundary
-            #     image[image < low_boundary] = low_boundary
-            #     image = (image - low_boundary) / WW
-            #     cv2.imwrite('{}/mask_{}.jpg'.format(cur_tmp_dir, idx), np.asarray(mask != 0, np.uint8) * 200)
-            #     cv2.imwrite('{}/{}.jpg'.format(cur_tmp_dir, idx), np.asarray(image*255, np.uint8))
     return num_frames
 
 
@@ -271,7 +260,7 @@ def generate_tfrecords_V2(dataset_dir, annotation_dir, save_dir):
     for i in range(num_processing):
         input_ids = case_ids[num_id_per_processing * i: num_id_per_processing * (i + 1)]
         print('idx is {}, ', i)
-        results.append(p.apply_async(generate_tfrecords_V1Core, args=(input_ids, dataset_dir, annotation_dir,
+        results.append(p.apply_async(generate_tfrecords_V2Core, args=(input_ids, dataset_dir, annotation_dir,
                                                                       os.path.join(save_dir,
                                                                                    '{}.tfrecords'.format(i)),)))
     print('Waiting for all subprocesses done...')
